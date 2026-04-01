@@ -1,13 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Mini ML Game</title>
+  <title>Mini ML Full</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { margin:0; overflow:hidden; background:#111; }
+    body { margin:0; overflow:hidden; background:#000; }
     canvas { display:block; }
 
-    /* tombol skill */
     .btn {
       position: fixed;
       bottom: 20px;
@@ -19,24 +18,25 @@
       text-align: center;
       line-height: 60px;
       font-weight: bold;
-      user-select: none;
     }
 
     #atk { right: 20px; }
     #skill { right: 100px; }
 
-    /* upload */
-    #upload {
+    input {
       position: fixed;
-      top: 10px;
       left: 10px;
       color: white;
     }
+
+    #heroUpload { top: 10px; }
+    #bgUpload { top: 50px; }
   </style>
 </head>
 <body>
 
-<input type="file" id="upload">
+<input type="file" id="heroUpload">
+<input type="file" id="bgUpload">
 
 <canvas id="game"></canvas>
 
@@ -50,44 +50,62 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
+// MAP SIZE (lebih besar dari layar)
+const mapWidth = 2000;
+const mapHeight = 1200;
+
+// CAMERA
+let camera = { x: 0, y: 0 };
+
+// HERO
 let hero = {
-  x: 100,
+  x: 200,
   y: 200,
   size: 70,
   hp: 100,
-  speed: 4,
-  img: new Image()
+  speed: 5,
+  img: new Image(),
+  loaded: false
 };
 
-// default pakai file lokal
-hero.img.src = "hero.png";
+hero.img.src = "https://via.placeholder.com/100";
+hero.img.onload = () => hero.loaded = true;
 
+// BACKGROUND
+let bgImg = new Image();
+let bgLoaded = false;
+
+bgImg.onload = () => bgLoaded = true;
+
+// UPLOAD HERO
+document.getElementById("heroUpload").addEventListener("change", e => {
+  let reader = new FileReader();
+  reader.onload = ev => hero.img.src = ev.target.result;
+  reader.readAsDataURL(e.target.files[0]);
+});
+
+// UPLOAD BG
+document.getElementById("bgUpload").addEventListener("change", e => {
+  let reader = new FileReader();
+  reader.onload = ev => bgImg.src = ev.target.result;
+  reader.readAsDataURL(e.target.files[0]);
+});
+
+// ENEMY
 let enemy = {
-  x: 500,
-  y: 200,
+  x: 800,
+  y: 400,
   size: 70,
   hp: 100
 };
 
+// CONTROL
 let keys = {};
 document.addEventListener("keydown", e => keys[e.key] = true);
 document.addEventListener("keyup", e => keys[e.key] = false);
 
+// ATTACK
 let canAttack = true;
-let canSkill = true;
-
-// upload foto dari galeri
-document.getElementById("upload").addEventListener("change", function(e) {
-  let file = e.target.files[0];
-  let reader = new FileReader();
-
-  reader.onload = function(event) {
-    hero.img.src = event.target.result;
-  };
-
-  reader.readAsDataURL(file);
-});
-
 function attack() {
   if (!canAttack) return;
 
@@ -95,64 +113,89 @@ function attack() {
   if (dist < 100) enemy.hp -= 10;
 
   canAttack = false;
-  setTimeout(() => canAttack = true, 500);
+  setTimeout(() => canAttack = true, 400);
 }
 
+// SKILL
+let canSkill = true;
 function skill() {
   if (!canSkill) return;
 
   let dist = Math.hypot(hero.x - enemy.x, hero.y - enemy.y);
-  if (dist < 150) enemy.hp -= 25;
+  if (dist < 180) enemy.hp -= 25;
 
   canSkill = false;
-  setTimeout(() => canSkill = true, 1500);
+  setTimeout(() => canSkill = true, 1200);
 }
 
-// tombol UI
 document.getElementById("atk").onclick = attack;
 document.getElementById("skill").onclick = skill;
 
+// UPDATE
 function update() {
-  // gerak keyboard
   if (keys["w"]) hero.y -= hero.speed;
   if (keys["s"]) hero.y += hero.speed;
   if (keys["a"]) hero.x -= hero.speed;
   if (keys["d"]) hero.x += hero.speed;
 
-  // musuh ngejar
+  if (keys[" "]) attack();
+  if (keys["e"]) skill();
+
+  // BATAS MAP
+  hero.x = Math.max(0, Math.min(mapWidth - hero.size, hero.x));
+  hero.y = Math.max(0, Math.min(mapHeight - hero.size, hero.y));
+
+  // MUSUH NGIKUT
   let dx = hero.x - enemy.x;
   let dy = hero.y - enemy.y;
   enemy.x += dx * 0.01;
   enemy.y += dy * 0.01;
 
-  // attack keyboard
-  if (keys[" "]) attack();
-  if (keys["e"]) skill();
+  // CAMERA NGIKUT HERO
+  camera.x = hero.x - canvas.width / 2;
+  camera.y = hero.y - canvas.height / 2;
+
+  camera.x = Math.max(0, Math.min(mapWidth - canvas.width, camera.x));
+  camera.y = Math.max(0, Math.min(mapHeight - canvas.height, camera.y));
 }
 
+// DRAW
 function draw() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // hero (gambar wajah kamu)
-  ctx.drawImage(hero.img, hero.x, hero.y, hero.size, hero.size);
+  // BACKGROUND MAP
+  if (bgLoaded) {
+    ctx.drawImage(bgImg, -camera.x, -camera.y, mapWidth, mapHeight);
+  } else {
+    ctx.fillStyle = "#222";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 
-  // HP hero
+  // HERO
+  if (hero.loaded) {
+    ctx.drawImage(hero.img, hero.x - camera.x, hero.y - camera.y, hero.size, hero.size);
+  } else {
+    ctx.fillStyle = "blue";
+    ctx.fillRect(hero.x - camera.x, hero.y - camera.y, hero.size, hero.size);
+  }
+
+  // HP HERO
   ctx.fillStyle = "red";
-  ctx.fillRect(hero.x, hero.y - 10, hero.hp, 6);
+  ctx.fillRect(hero.x - camera.x, hero.y - camera.y - 10, hero.hp, 5);
 
-  // enemy
+  // ENEMY
   ctx.fillStyle = "purple";
-  ctx.fillRect(enemy.x, enemy.y, enemy.size, enemy.size);
+  ctx.fillRect(enemy.x - camera.x, enemy.y - camera.y, enemy.size, enemy.size);
 
-  // HP enemy
   ctx.fillStyle = "red";
-  ctx.fillRect(enemy.x, enemy.y - 10, enemy.hp, 6);
+  ctx.fillRect(enemy.x - camera.x, enemy.y - camera.y - 10, enemy.hp, 5);
 
-  // teks
+  // TEXT
   ctx.fillStyle = "white";
-  ctx.fillText("WASD = gerak | SPACE = attack | E = skill", 20, 20);
+  ctx.fillText("WASD / Touch | SPACE = Attack | E = Skill", 20, 30);
 }
 
+// LOOP
 function gameLoop() {
   update();
   draw();
